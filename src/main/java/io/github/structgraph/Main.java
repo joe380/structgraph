@@ -17,16 +17,18 @@
 package io.github.structgraph;
 
 import io.github.structgraph.logging.ProgressSink;
+import io.github.structgraph.neo4j.Graph;
+import io.github.structgraph.neo4j.Neo4jSink;
 import io.github.structgraph.source.JarCollector;
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-
+import org.apache.commons.io.FileUtils;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 
-import io.github.structgraph.neo4j.Graph;
-import io.github.structgraph.neo4j.Neo4jSink;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -39,13 +41,9 @@ public class Main {
             printUsage();
             System.exit(1);
         }
-        File jar = new File(args[0]);
-        if (!jar.exists()) {
-            System.err.println(jar + " does not exist");
-            System.exit(1);
-        }
-
-        GraphDatabaseService db = new GraphDatabaseFactory().newEmbeddedDatabase(args[1]);
+        File jar = checkFileToProcess(args[0]);
+        File dbLocation = prepareDbDirectory(args[1]);
+        GraphDatabaseService db = new GraphDatabaseFactory().newEmbeddedDatabase(dbLocation);
         Runtime.getRuntime().addShutdownHook(new Thread(db::shutdown));
         Graph.prepareSchema(db);
 
@@ -68,6 +66,21 @@ public class Main {
         System.out.print("Inferring additional information... ");
         Graph.finalizeSchema(db);
         System.out.println("Done in "+secondsSince(start)+ "s.");
+    }
+
+    private static File prepareDbDirectory(String arg) throws IOException {
+        File dbLocation = new File(arg);
+        FileUtils.cleanDirectory(dbLocation);
+        return dbLocation;
+    }
+
+    private static File checkFileToProcess(String arg) {
+        File jar = new File(arg);
+        if (!jar.exists()) {
+            System.err.println(jar + " does not exist");
+            System.exit(1);
+        }
+        return jar;
     }
 
     private static long secondsSince(long start) {
