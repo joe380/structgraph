@@ -292,23 +292,23 @@ public class Graph {
         for (String relType : new String[] {"invokes","method"}) {
             // and we will copy them. relationship type cannot be parametrized, therefore we enumerated them
             db.execute(String.format(
-                    "match (m)-[:replaceBy]->(sm), (a)-[r:%1$s]->m\n" +
-                            "create a-[ri:%1$s]->sm\n" +
+                    "match (m)-[:replaceBy]->(sm), (a)-[r:%1$s]->(m)\n" +
+                            "create (a)-[ri:%1$s]->(sm)\n" +
                             "set ri=r",relType));
         }
         // and now we can finally delete the old method node
-        db.execute("match (m)-[rep:replaceBy]->(), ()-[r]->m delete r, rep, m");
+        db.execute("match (m)-[rep:replaceBy]->(), ()-[r]->(m) delete r, rep, m");
     }
 
     private static void findVirtualMethods(GraphDatabaseService db) throws QueryExecutionException {
         db.execute(// find methods that are not declared in the class
-                "match (m:Method) where not m<-[:hasMethod]-()\n" +
+                "match (m:Method) where not (m)<-[:hasMethod]-()\n" +
                         // method.name is Class#name(signature)
                         "with m, split(m.name,'#')[0] as className\n" +
                         // find a method with same name and signature
                         "match (superMethod:Method{methodName:m.methodName, signature:m.signature}),\n" +
                         // which is declared in a superclass
-                        "      p=(c:Class{name:className})-[:inherits*]->(super)-[:hasMethod]->superMethod\n" +
+                        "      p=(c:Class{name:className})-[:inherits*]->(super)-[:hasMethod]->(superMethod)\n" +
                         // and group them in a collection
                         "with m, collect(p) as allPossibleSuperMethods\n" +
                         // and now keep the closest method (with the shortest path to it)
@@ -322,7 +322,7 @@ public class Graph {
                         // and the last on the path is the closest declared method
                         "with m,last(superMethodPath) as superMethod\n" +
                         // so we mark the replacement
-                        "create m-[:replaceBy]->superMethod");
+                        "create (m)-[:replaceBy]->(superMethod)");
     }
 
     private static void labelEjbs(GraphDatabaseService db) throws QueryExecutionException {
@@ -336,14 +336,15 @@ public class Graph {
     }
 
     private static void linkImplementations(GraphDatabaseService db) throws QueryExecutionException {
+
         // create link from definition to implementation
         db.execute("match (m:Method)<-[:hasMethod]-(i:Class)-[:inherits*..4]->(c:Class)-[:hasMethod]->(d:Method)\n"
                 + "where d.methodName = m.methodName AND d.signature = m.signature\n"
-                + "create d-[:overriden]->m");
+                + "create (d)-[:overriden]->(m)");
         // count probability of implementation method referred
         db.execute("match (d:Method)-[r:overriden]->()\n"
                 + "with d, count(r) as c\n"
-                + "match d-[r:overriden]->()\n"
+                + "match (d)-[r:overriden]->()\n"
                 + "set r.p = 1.0/c");
     }
     
